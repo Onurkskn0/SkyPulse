@@ -4,56 +4,75 @@ import {
   WiDaySunny, WiCloud, WiRain, WiSnow, WiThunderstorm, WiFog,
   WiSunrise, WiSunset, WiTime3 
 } from 'react-icons/wi'
-import { FiMapPin, FiCalendar, FiChevronDown } from 'react-icons/fi'
+import { FiMapPin, FiCalendar, FiChevronDown, FiSearch } from 'react-icons/fi'
 import { BiLoaderAlt } from 'react-icons/bi'
 import { MdAir } from 'react-icons/md'
 
-import { TURKEY_DATA } from './cities'
+// DİKKAT: cities.js dosyasından named export (süslü parantezli) alıyoruz
+import { TURKEY_DATA } from './cities' 
 
 function App() {
-  const [selectedCity, setSelectedCity] = useState("İstanbul")
-  const [selectedDistrict, setSelectedDistrict] = useState(TURKEY_DATA["İstanbul"][0])
+  // --- GÜVENLİ BAŞLANGIÇ AYARI ---
+  // Uygulamanın çökmemesi için listenin ilk şehrini güvenle alıyoruz.
+  const cityKeys = Object.keys(TURKEY_DATA).sort();
+  const initialCity = cityKeys.includes("İstanbul") ? "İstanbul" : cityKeys[0];
+  const initialDistrictData = TURKEY_DATA[initialCity] ? TURKEY_DATA[initialCity][0] : null;
+
+  const [selectedCity, setSelectedCity] = useState(initialCity)
+  const [selectedDistrict, setSelectedDistrict] = useState(initialDistrictData)
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  // --- KOORDİNAT BUL VE HAVA DURUMU ÇEK ---
-  const fetchWeatherByLocation = async (city, district) => {
-    setLoading(true)
+  // --- HAVA DURUMU ÇEKME (STABİL) ---
+  const fetchWeather = async (lat, lon) => {
+    if (!lat || !lon) return; 
+    setLoading(true);
     try {
-      // 1. ADIM: İsme göre koordinat bul (Geocoding API)
-      // Türkiye içinde arama yapması için ülke kodunu ve arama formatını düzenledik
-      const geoResponse = await fetch(
-        `https://geocoding-api.open-meteo.com/v1/search?name=${district}&count=1&language=tr&format=json`
-      )
-      const geoData = await geoResponse.json()
+      // Artık API'ye isim aratmak yerine, direkt güvenilir koordinatları kullanıyoruz.
+      const response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,surface_pressure,wind_speed_10m&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`
+      );
+      const data = await response.json();
+      
+      if (!response.ok) throw new Error("API'den geçersiz yanıt alındı.");
 
-      if (!geoData.results) {
-        throw new Error("Konum bulunamadı.")
-      }
-
-      const { latitude, longitude } = geoData.results[0]
-
-      // 2. ADIM: Koordinata göre hava durumu çek
-      const weatherResponse = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,surface_pressure,wind_speed_10m&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`
-      )
-      const weatherData = await weatherResponse.json()
-      setWeather(weatherData)
-
+      setWeather(data);
     } catch (error) {
-      console.error("Hata:", error)
-      alert("Veri alınırken bir sorun oluştu.")
+      console.error("Fetch Hatası:", error);
+      alert("Veri alınırken bir sorun oluştu."); 
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  // İlk açılış
+  // İlk açılışta veriyi çek
   useEffect(() => {
-    fetchWeatherByLocation(selectedCity, selectedDistrict)
-  }, [])
+    if (initialDistrictData) {
+      fetchWeather(initialDistrictData.lat, initialDistrictData.lon);
+    }
+  }, []);
 
-  // --- İKON SEÇİCİ ---
+  // --- İLÇE DEĞİŞTİRME LOGİĞİ ---
+  const handleDistrictChange = (distName) => {
+    const districtData = TURKEY_DATA[selectedCity].find(d => d.name === distName);
+    
+    if (districtData) {
+      setSelectedDistrict(districtData);
+      fetchWeather(districtData.lat, districtData.lon);
+    } else {
+      console.error("HATA: Seçilen ilçe verisi bulunamadı.");
+    }
+  };
+  
+  // --- İL DEĞİŞTİRME LOGİĞİ ---
+  const handleCityChange = (newCity) => {
+    setSelectedCity(newCity);
+    const firstDistrict = TURKEY_DATA[newCity][0]; // İlk ilçeyi al
+    
+    setSelectedDistrict(firstDistrict);
+    fetchWeather(firstDistrict.lat, firstDistrict.lon);
+  };
+  
   const getWeatherIcon = (code, size = "text-4xl") => {
     if (code === 0) return <WiDaySunny className={`${size} text-yellow-400`} />
     if ([1, 2, 3].includes(code)) return <WiCloud className={`${size} text-blue-200`} />
@@ -82,42 +101,36 @@ function App() {
 
       <div className="max-w-7xl mx-auto relative z-10">
         
-        {/* HEADER */}
         <header className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
               <WiDaySunny className="text-blue-500" size={40}/> 
-              SkyPulse <span className="text-slate-300 font-light text-sm hidden md:inline tracking-normal ml-2">| Anlık Hava. Akıllı Kararlar.</span>
+              SkyPulse <span className="text-slate-400 font-light text-sm hidden md:inline tracking-normal ml-2">| Anlık Hava. Akıllı Kararlar.</span>
             </h1>
             <p className="text-slate-500 text-sm mt-1 ml-1">Bugün, {new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year:'numeric' })}</p>
           </div>
 
-          {/* SEÇİM ALANI */}
           <div className="flex gap-3 bg-white/5 p-1.5 rounded-2xl border border-white/10 backdrop-blur-md z-50">
             
             {/* İL SEÇİMİ */}
             <CustomDropdown 
               options={Object.keys(TURKEY_DATA).sort()} 
               selected={selectedCity} 
-              onChange={(city) => {
-                setSelectedCity(city)
-                const firstDist = TURKEY_DATA[city][0]
-                setSelectedDistrict(firstDist)
-                fetchWeatherByLocation(city, firstDist)
-              }}
+              onChange={handleCityChange}
               icon={FiMapPin}
+              searchable={true}
+              placeholder="İl Ara..."
             />
 
             <div className="w-[1px] bg-white/10 my-1"></div>
 
             {/* İLÇE SEÇİMİ */}
             <CustomDropdown 
-              options={TURKEY_DATA[selectedCity].sort()} 
-              selected={selectedDistrict} 
-              onChange={(distName) => {
-                setSelectedDistrict(distName)
-                fetchWeatherByLocation(selectedCity, distName)
-              }}
+              options={TURKEY_DATA[selectedCity] ? TURKEY_DATA[selectedCity].map(d => d.name).sort() : []} 
+              selected={selectedDistrict?.name} 
+              onChange={handleDistrictChange}
+              searchable={true}
+              placeholder="İlçe Ara..."
             />
           </div>
         </header>
@@ -125,7 +138,6 @@ function App() {
         {weather && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             
-            {/* SOL SÜTUN */}
             <div className="lg:col-span-3 space-y-6">
               
               {/* ANA KART */}
@@ -139,7 +151,7 @@ function App() {
                       <span className="font-semibold text-sm tracking-wide opacity-90">{selectedCity}</span>
                     </div>
                     <h2 className="text-4xl md:text-6xl font-bold tracking-tight text-white mb-3 pb-1">
-                      {selectedDistrict}
+                      {selectedDistrict.name}
                     </h2>
                     <p className="text-lg text-white-500 font-medium flex items-center gap-3">
                       <span className="text-2xl font-bold">{Math.round(weather.current.temperature_2m)}°</span>
@@ -226,7 +238,7 @@ function App() {
         )}
 
         <div className="mt-10 text-center border-t border-white/5 pt-6">
-           <p className="text-slate-500 text-xs font-sans">DEVELOPED BY ONUR KESKIN © 2025</p>
+           <p className="text-slate-500 text-xs font-mono">DEVELOPED BY ONUR KESKIN © 2025</p>
         </div>
       </div>
 
@@ -240,52 +252,85 @@ function App() {
   )
 }
 
-// --- ÖZEL DROPDOWN BİLEŞENİ ---
-function CustomDropdown({ options, selected, onChange, icon: Icon }) {
+function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = false, placeholder = "Ara..." }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
   const dropdownRef = useRef(null)
+  const searchInputRef = useRef(null)
 
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false)
+        setSearchTerm("")
       }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    if (isOpen && searchable && searchInputRef.current) {
+      searchInputRef.current.focus()
+    }
+  }, [isOpen, searchable])
+
+  const filteredOptions = options.filter(option => 
+    option.toLocaleLowerCase('tr').includes(searchTerm.toLocaleLowerCase('tr'))
+  )
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 bg-transparent text-sm text-white px-4 py-2.5 rounded-xl hover:bg-white/10 transition-colors outline-none min-w-[140px] justify-between"
+        className="flex items-center gap-2 bg-transparent text-sm text-white px-4 py-2.5 rounded-xl hover:bg-white/10 transition-colors outline-none min-w-[140px] justify-between border border-transparent focus:border-white/20"
       >
         <div className="flex items-center gap-2">
           {Icon && <Icon className="text-slate-400" />}
-          <span>{selected}</span>
+          <span className="truncate max-w-[100px]">{selected}</span>
         </div>
         <FiChevronDown className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-48 bg-[#1e293b] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
-          <div className="max-h-60 overflow-y-auto scrollbar-custom py-1">
-            {options.map((option) => (
-              <div 
-                key={option}
-                onClick={() => {
-                  onChange(option)
-                  setIsOpen(false)
-                }}
-                className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between
-                  ${selected === option ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'}
-                `}
-              >
-                {option}
-                {selected === option && <div className="w-1.5 h-1.5 rounded-full bg-white"></div>}
+        <div className="absolute top-full left-0 mt-2 w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in ring-1 ring-black/5">
+          {searchable && (
+            <div className="p-2 sticky top-0 bg-[#0f172a] border-b border-white/10 z-10">
+              <div className="relative">
+                <FiSearch className="absolute left-3 top-2.5 text-slate-400 text-xs" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder={placeholder}
+                  className="w-full bg-white/5 text-white text-sm pl-8 pr-3 py-2 rounded-lg outline-none focus:bg-white/10 transition-colors placeholder:text-slate-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  name="dropdown-search"
+                />
               </div>
-            ))}
+            </div>
+          )}
+          <div className="max-h-60 overflow-y-auto scrollbar-custom py-1">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => (
+                <div 
+                  key={option}
+                  onClick={() => {
+                    onChange(option)
+                    setIsOpen(false)
+                    setSearchTerm("")
+                  }}
+                  className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between
+                    ${selected === option ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'}
+                  `}
+                >
+                  {option}
+                  {selected === option && <div className="w-1.5 h-1.5 rounded-full bg-white"></div>}
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-3 text-xs text-slate-500 text-center">Sonuç bulunamadı</div>
+            )}
           </div>
         </div>
       )}

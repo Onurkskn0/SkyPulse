@@ -293,7 +293,7 @@ function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = 
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in ring-1 ring-black/5">
+        <div className="absolute top-full right-0 mt-2 w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in ring-1 ring-black/5">
           {searchable && (
             <div className="p-2 sticky top-0 bg-[#0f172a] border-b border-white/10 z-10">
               <div className="relative">

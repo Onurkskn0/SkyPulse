@@ -306,6 +306,7 @@ function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   name="dropdown-search"
+                   autoComplete="off"
                 />
               </div>
             </div>

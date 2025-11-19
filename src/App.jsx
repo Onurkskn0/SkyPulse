@@ -8,12 +8,10 @@ import { FiMapPin, FiCalendar, FiChevronDown, FiSearch } from 'react-icons/fi'
 import { BiLoaderAlt } from 'react-icons/bi'
 import { MdAir } from 'react-icons/md'
 
-// DİKKAT: cities.js dosyasından named export (süslü parantezli) alıyoruz
 import { TURKEY_DATA } from './cities' 
 
 function App() {
-  // --- GÜVENLİ BAŞLANGIÇ AYARI ---
-  // Uygulamanın çökmemesi için listenin ilk şehrini güvenle alıyoruz.
+  // GÜVENLİ BAŞLANGIÇ AYARI
   const cityKeys = Object.keys(TURKEY_DATA).sort();
   const initialCity = cityKeys.includes("İstanbul") ? "İstanbul" : cityKeys[0];
   const initialDistrictData = TURKEY_DATA[initialCity] ? TURKEY_DATA[initialCity][0] : null;
@@ -28,7 +26,6 @@ function App() {
     if (!lat || !lon) return; 
     setLoading(true);
     try {
-      // Artık API'ye isim aratmak yerine, direkt güvenilir koordinatları kullanıyoruz.
       const response = await fetch(
         `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,surface_pressure,wind_speed_10m&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`
       );
@@ -52,7 +49,6 @@ function App() {
     }
   }, []);
 
-  // --- İLÇE DEĞİŞTİRME LOGİĞİ ---
   const handleDistrictChange = (distName) => {
     const districtData = TURKEY_DATA[selectedCity].find(d => d.name === distName);
     
@@ -64,10 +60,9 @@ function App() {
     }
   };
   
-  // --- İL DEĞİŞTİRME LOGİĞİ ---
   const handleCityChange = (newCity) => {
     setSelectedCity(newCity);
-    const firstDistrict = TURKEY_DATA[newCity][0]; // İlk ilçeyi al
+    const firstDistrict = TURKEY_DATA[newCity][0];
     
     setSelectedDistrict(firstDistrict);
     fetchWeather(firstDistrict.lat, firstDistrict.lon);
@@ -112,7 +107,7 @@ function App() {
 
           <div className="flex gap-3 bg-white/5 p-1.5 rounded-2xl border border-white/10 backdrop-blur-md z-50">
             
-            {/* İL SEÇİMİ */}
+            {/* İL SEÇİMİ (SOL TARAFTA) */}
             <CustomDropdown 
               options={Object.keys(TURKEY_DATA).sort()} 
               selected={selectedCity} 
@@ -120,17 +115,19 @@ function App() {
               icon={FiMapPin}
               searchable={true}
               placeholder="İl Ara..."
+              side="left" /* YENİ: Sola dayalı açılacak */
             />
 
             <div className="w-[1px] bg-white/10 my-1"></div>
 
-            {/* İLÇE SEÇİMİ */}
+            {/* İLÇE SEÇİMİ (SAĞ TARAFTA) */}
             <CustomDropdown 
               options={TURKEY_DATA[selectedCity] ? TURKEY_DATA[selectedCity].map(d => d.name).sort() : []} 
               selected={selectedDistrict?.name} 
               onChange={handleDistrictChange}
               searchable={true}
               placeholder="İlçe Ara..."
+              side="right" /* YENİ: Sağa dayalı açılacak */
             />
           </div>
         </header>
@@ -252,7 +249,7 @@ function App() {
   )
 }
 
-function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = false, placeholder = "Ara..." }) {
+function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = false, placeholder = "Ara...", side = 'left' }) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const dropdownRef = useRef(null)
@@ -279,6 +276,9 @@ function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = 
     option.toLocaleLowerCase('tr').includes(searchTerm.toLocaleLowerCase('tr'))
   )
 
+  // Konumlandırma sınıfı dinamik olarak belirlenir
+  const positionClass = side === 'right' ? 'right-0' : 'left-0';
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button 
@@ -293,7 +293,7 @@ function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = 
       </button>
 
       {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in ring-1 ring-black/5">
+        <div className={`absolute top-full ${positionClass} mt-2 w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in ring-1 ring-black/5`}>
           {searchable && (
             <div className="p-2 sticky top-0 bg-[#0f172a] border-b border-white/10 z-10">
               <div className="relative">

@@ -235,7 +235,7 @@ function App() {
         )}
 
         <div className="mt-10 text-center border-t border-white/5 pt-6">
-           <p className="text-slate-500 text-xs font-mono">DEVELOPED BY ONUR KESKIN © 2025</p>
+           <p className="text-slate-500 text-sm font-mono">DEVELOPED BY ONUR KESKIN © 2025</p>
         </div>
       </div>
 

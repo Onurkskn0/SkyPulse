@@ -3,7 +3,9 @@ import {
   WiHumidity, WiStrongWind, WiThermometer, WiBarometer, 
   WiDaySunny, WiDayCloudy, WiCloud, WiRain, WiSnow, WiThunderstorm, WiFog, 
   WiSunrise, WiSunset, WiTime3,
-  WiNightAltCloudy, WiNightAltRain, WiNightAltSnow, WiNightAltThunderstorm
+  WiNightAltCloudy, WiNightAltRain, WiNightAltSnow, WiNightAltThunderstorm,
+  // YENİ EKLENEN SİS İKONLARI:
+  WiDayFog, WiNightFog 
 } from 'react-icons/wi'
 import { FiMapPin, FiCalendar, FiChevronDown, FiSearch, FiMoon, FiArrowUp } from 'react-icons/fi'
 import { BiLoaderAlt } from 'react-icons/bi'
@@ -26,7 +28,6 @@ function App() {
   
   const [greeting, setGreeting] = useState("Merhaba");
   
-  // Ref for focus management
   const cityButtonRef = useRef(null);
 
   useEffect(() => {
@@ -36,12 +37,10 @@ function App() {
     else if (hour >= 18 && hour < 22) setGreeting("İyi Akşamlar");
     else setGreeting("İyi Geceler");
 
-    // GLOBAL KISAYOL GÜNCELLENDİ: Ctrl + . (Nokta)
     const handleGlobalKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === '.') {
         e.preventDefault(); 
         e.stopPropagation();
-        // Butona odaklan ve menüyü aç
         if (cityButtonRef.current) {
             cityButtonRef.current.focus();
             setIsCityOpen(true);
@@ -96,21 +95,32 @@ function App() {
     }
   };
   
+  // --- GÜNCELLENMİŞ İKON MANTIĞI (SİS EKLENDİ) ---
   const getWeatherIcon = (code, size = "text-4xl", isDay = 1) => {
     const wiScale = "scale-125"; 
+    
+    // GECE MODU
     if (isDay === 0) {
         if (code === 0) return <FiMoon className={`${size} text-blue-200`} />
         if ([1, 2, 3].includes(code)) return <WiNightAltCloudy className={`${size} ${wiScale} text-blue-200`} />
-        if ([45, 48].includes(code)) return <WiFog className={`${size} ${wiScale} text-gray-400`} />
+        
+        // YENİ: Gece Sisi (Aylı Sis)
+        if ([45, 48].includes(code)) return <WiNightFog className={`${size} ${wiScale} text-gray-400`} />
+        
         if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return <WiNightAltRain className={`${size} ${wiScale} text-blue-400`} />
         if ([71, 73, 75, 85, 86].includes(code)) return <WiNightAltSnow className={`${size} ${wiScale} text-white`} />
         if ([95, 96, 99].includes(code)) return <WiNightAltThunderstorm className={`${size} ${wiScale} text-purple-400`} />
         return <FiMoon className={`${size} text-blue-200`} />
     }
+
+    // GÜNDÜZ MODU
     if (code === 0) return <WiDaySunny className={`${size} ${wiScale} text-yellow-400`} />
     if ([1, 2].includes(code)) return <WiDayCloudy className={`${size} ${wiScale} text-blue-100`} />
     if (code === 3) return <WiCloud className={`${size} ${wiScale} text-blue-200`} />
-    if ([45, 48].includes(code)) return <WiFog className={`${size} ${wiScale} text-gray-400`} />
+    
+    // YENİ: Gündüz Sisi (Güneşli Sis)
+    if ([45, 48].includes(code)) return <WiDayFog className={`${size} ${wiScale} text-gray-400`} />
+    
     if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return <WiRain className={`${size} ${wiScale} text-blue-400`} />
     if ([71, 73, 75, 85, 86].includes(code)) return <WiSnow className={`${size} ${wiScale} text-white`} />
     if ([95, 96, 99].includes(code)) return <WiThunderstorm className={`${size} ${wiScale} text-purple-400`} />
@@ -138,7 +148,6 @@ function App() {
           </div>
 
           <div className="flex gap-3 bg-slate-900 p-1.5 rounded-2xl border border-white/10 z-50 shadow-xl">
-            {/* İL MENÜSÜ - Ref ve Shortcut Güncellendi */}
             <CustomDropdown 
               triggerRef={cityButtonRef}
               options={cityKeys} 
@@ -150,7 +159,7 @@ function App() {
               side="left"
               forceOpen={isCityOpen} 
               setForceOpen={setIsCityOpen}
-              shortcutHint="Ctrl + ." // Görsel ipucu güncellendi
+              shortcutHint="Ctrl + ."
             />
             <div className="w-[1px] bg-white/10 my-1"></div>
             <CustomDropdown 
@@ -209,7 +218,7 @@ function App() {
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-300">
                   <WiTime3 className="text-2xl"/> Saatlik Tahmin
                 </h3>
-                <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-custom outline-none">
+                <div tabIndex={-1} className="flex overflow-x-auto gap-4 pb-4 scrollbar-custom outline-none focus:outline-none">
                   {weather.hourly.time.slice(0, 24).map((time, index) => {
                     const hour = new Date(time).getHours()
                     const now = new Date().getHours()

@@ -1,28 +1,59 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { 
   WiHumidity, WiStrongWind, WiThermometer, WiBarometer, 
-  WiDaySunny, WiCloud, WiRain, WiSnow, WiThunderstorm, WiFog,
-  WiSunrise, WiSunset, WiTime3 
+  WiDaySunny, WiDayCloudy, WiCloud, WiRain, WiSnow, WiThunderstorm, WiFog, 
+  WiSunrise, WiSunset, WiTime3,
+  WiNightAltCloudy, WiNightAltRain, WiNightAltSnow, WiNightAltThunderstorm
 } from 'react-icons/wi'
-import { FiMapPin, FiCalendar, FiChevronDown, FiSearch } from 'react-icons/fi'
+import { FiMapPin, FiCalendar, FiChevronDown, FiSearch, FiMoon, FiArrowUp } from 'react-icons/fi'
 import { BiLoaderAlt } from 'react-icons/bi'
 import { MdAir } from 'react-icons/md'
 
 import { TURKEY_DATA } from './cities' 
 
 function App() {
-  // GÜVENLİ BAŞLANGIÇ AYARI
-  const cityKeys = Object.keys(TURKEY_DATA).sort();
-  const initialCity = cityKeys.includes("İstanbul") ? "İstanbul" : cityKeys[0];
-  const initialDistrictData = TURKEY_DATA[initialCity] ? TURKEY_DATA[initialCity][0] : null;
+  const cityKeys = useMemo(() => Object.keys(TURKEY_DATA).sort(), []);
 
-  const [selectedCity, setSelectedCity] = useState(initialCity)
-  const [selectedDistrict, setSelectedDistrict] = useState(initialDistrictData)
+  const [menuCity, setMenuCity] = useState(null)
+  const [menuDistrict, setMenuDistrict] = useState(null)
+  const [displayCity, setDisplayCity] = useState(null)
+  const [displayDistrict, setDisplayDistrict] = useState(null)
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(false)
+  
+  const [isDistrictOpen, setIsDistrictOpen] = useState(false);
+  const [isCityOpen, setIsCityOpen] = useState(false);
+  
+  const [greeting, setGreeting] = useState("Merhaba");
+  
+  // Ref for focus management
+  const cityButtonRef = useRef(null);
 
-  // --- HAVA DURUMU ÇEKME (STABİL) ---
-  const fetchWeather = async (lat, lon) => {
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) setGreeting("Günaydın");
+    else if (hour >= 12 && hour < 18) setGreeting("Tünaydın");
+    else if (hour >= 18 && hour < 22) setGreeting("İyi Akşamlar");
+    else setGreeting("İyi Geceler");
+
+    // GLOBAL KISAYOL GÜNCELLENDİ: Ctrl + . (Nokta)
+    const handleGlobalKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === '.') {
+        e.preventDefault(); 
+        e.stopPropagation();
+        // Butona odaklan ve menüyü aç
+        if (cityButtonRef.current) {
+            cityButtonRef.current.focus();
+            setIsCityOpen(true);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  const fetchWeather = async (lat, lon, city, district) => {
     if (!lat || !lon) return; 
     setLoading(true);
     try {
@@ -30,10 +61,12 @@ function App() {
         `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,surface_pressure,wind_speed_10m&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`
       );
       const data = await response.json();
-      
       if (!response.ok) throw new Error("API'den geçersiz yanıt alındı.");
 
       setWeather(data);
+      setDisplayCity(city);        
+      setDisplayDistrict(district); 
+
     } catch (error) {
       console.error("Fetch Hatası:", error);
       alert("Veri alınırken bir sorun oluştu."); 
@@ -42,59 +75,58 @@ function App() {
     }
   };
 
-  // İlk açılışta veriyi çek
-  useEffect(() => {
-    if (initialDistrictData) {
-      fetchWeather(initialDistrictData.lat, initialDistrictData.lon);
-    }
-  }, []);
+  const handleCityChange = (newCity) => {
+    setMenuCity(newCity);      
+    setMenuDistrict(null);     
+    setIsCityOpen(false); 
+    
+    setTimeout(() => {
+       setIsDistrictOpen(true);
+    }, 100); 
+  };
 
   const handleDistrictChange = (distName) => {
-    const districtData = TURKEY_DATA[selectedCity].find(d => d.name === distName);
+    if (!menuCity) return;
+    const districtData = TURKEY_DATA[menuCity].find(d => d.name === distName);
     
     if (districtData) {
-      setSelectedDistrict(districtData);
-      fetchWeather(districtData.lat, districtData.lon);
-    } else {
-      console.error("HATA: Seçilen ilçe verisi bulunamadı.");
+      setMenuDistrict(districtData); 
+      setIsDistrictOpen(false);      
+      fetchWeather(districtData.lat, districtData.lon, menuCity, districtData);
     }
   };
   
-  const handleCityChange = (newCity) => {
-    setSelectedCity(newCity);
-    const firstDistrict = TURKEY_DATA[newCity][0];
-    
-    setSelectedDistrict(firstDistrict);
-    fetchWeather(firstDistrict.lat, firstDistrict.lon);
-  };
-  
-  const getWeatherIcon = (code, size = "text-4xl") => {
-    if (code === 0) return <WiDaySunny className={`${size} text-yellow-400`} />
-    if ([1, 2, 3].includes(code)) return <WiCloud className={`${size} text-blue-200`} />
-    if ([45, 48].includes(code)) return <WiFog className={`${size} text-gray-400`} />
-    if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return <WiRain className={`${size} text-blue-400`} />
-    if ([71, 73, 75, 85, 86].includes(code)) return <WiSnow className={`${size} text-white`} />
-    if ([95, 96, 99].includes(code)) return <WiThunderstorm className={`${size} text-purple-400`} />
-    return <WiDaySunny className={`${size} text-gray-400`} />
+  const getWeatherIcon = (code, size = "text-4xl", isDay = 1) => {
+    const wiScale = "scale-125"; 
+    if (isDay === 0) {
+        if (code === 0) return <FiMoon className={`${size} text-blue-200`} />
+        if ([1, 2, 3].includes(code)) return <WiNightAltCloudy className={`${size} ${wiScale} text-blue-200`} />
+        if ([45, 48].includes(code)) return <WiFog className={`${size} ${wiScale} text-gray-400`} />
+        if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return <WiNightAltRain className={`${size} ${wiScale} text-blue-400`} />
+        if ([71, 73, 75, 85, 86].includes(code)) return <WiNightAltSnow className={`${size} ${wiScale} text-white`} />
+        if ([95, 96, 99].includes(code)) return <WiNightAltThunderstorm className={`${size} ${wiScale} text-purple-400`} />
+        return <FiMoon className={`${size} text-blue-200`} />
+    }
+    if (code === 0) return <WiDaySunny className={`${size} ${wiScale} text-yellow-400`} />
+    if ([1, 2].includes(code)) return <WiDayCloudy className={`${size} ${wiScale} text-blue-100`} />
+    if (code === 3) return <WiCloud className={`${size} ${wiScale} text-blue-200`} />
+    if ([45, 48].includes(code)) return <WiFog className={`${size} ${wiScale} text-gray-400`} />
+    if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return <WiRain className={`${size} ${wiScale} text-blue-400`} />
+    if ([71, 73, 75, 85, 86].includes(code)) return <WiSnow className={`${size} ${wiScale} text-white`} />
+    if ([95, 96, 99].includes(code)) return <WiThunderstorm className={`${size} ${wiScale} text-purple-400`} />
+    return <WiDaySunny className={`${size} ${wiScale} text-gray-400`} />
   }
 
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric' })
   }
 
-  if (!weather && loading) return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
-       <BiLoaderAlt className="animate-spin text-5xl text-blue-500" />
-    </div>
-  )
-
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8 font-sans selection:bg-blue-500 selection:text-white">
-      
-      <div className="fixed top-[-20%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="fixed bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[120px] pointer-events-none"></div>
+    <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8 font-sans selection:bg-blue-500 selection:text-white flex flex-col relative overflow-hidden">
+      <div className="fixed top-[-20%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
+      <div className="fixed bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
-      <div className="max-w-7xl mx-auto relative z-10">
+      <div className="max-w-7xl mx-auto relative z-10 w-full flex-grow flex flex-col">
         
         <header className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
           <div>
@@ -105,50 +137,54 @@ function App() {
             <p className="text-slate-500 text-sm mt-1 ml-1">Bugün, {new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year:'numeric' })}</p>
           </div>
 
-          <div className="flex gap-3 bg-white/5 p-1.5 rounded-2xl border border-white/10 backdrop-blur-md z-50">
-            
-            {/* İL SEÇİMİ (SOL TARAFTA) */}
+          <div className="flex gap-3 bg-slate-900 p-1.5 rounded-2xl border border-white/10 z-50 shadow-xl">
+            {/* İL MENÜSÜ - Ref ve Shortcut Güncellendi */}
             <CustomDropdown 
-              options={Object.keys(TURKEY_DATA).sort()} 
-              selected={selectedCity} 
+              triggerRef={cityButtonRef}
+              options={cityKeys} 
+              selected={menuCity} 
               onChange={handleCityChange}
               icon={FiMapPin}
               searchable={true}
-              placeholder="İl Ara..."
-              side="left" /* YENİ: Sola dayalı açılacak */
+              placeholder="İl Seçiniz..."
+              side="left"
+              forceOpen={isCityOpen} 
+              setForceOpen={setIsCityOpen}
+              shortcutHint="Ctrl + ." // Görsel ipucu güncellendi
             />
-
             <div className="w-[1px] bg-white/10 my-1"></div>
-
-            {/* İLÇE SEÇİMİ (SAĞ TARAFTA) */}
             <CustomDropdown 
-              options={TURKEY_DATA[selectedCity] ? TURKEY_DATA[selectedCity].map(d => d.name).sort() : []} 
-              selected={selectedDistrict?.name} 
+              options={menuCity ? TURKEY_DATA[menuCity].map(d => d.name).sort() : []} 
+              selected={menuDistrict?.name} 
               onChange={handleDistrictChange}
               searchable={true}
-              placeholder="İlçe Ara..."
-              side="right" /* YENİ: Sağa dayalı açılacak */
+              placeholder={menuCity ? "İlçe Seçiniz..." : "Önce İl Seçiniz"}
+              side="right"
+              forceOpen={isDistrictOpen} 
+              setForceOpen={setIsDistrictOpen} 
             />
           </div>
         </header>
 
-        {weather && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            
-            <div className="lg:col-span-3 space-y-6">
-              
-              {/* ANA KART */}
+        {loading && (
+            <div className="absolute inset-0 bg-slate-950/50 z-40 flex items-center justify-center backdrop-blur-sm rounded-3xl">
+                 <BiLoaderAlt className="animate-spin text-5xl text-blue-500" />
+            </div>
+        )}
+
+        {weather ? (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-fade-in">
+             <div className="lg:col-span-3 space-y-6">
               <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-[2.5rem] p-8 relative overflow-hidden shadow-2xl shadow-blue-900/20 group">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-white/20 transition-all duration-700"></div>
-                
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-center md:items-end gap-8">
                   <div>
                     <div className="flex items-center gap-2 text-blue-200 mb-2">
                       <FiMapPin /> 
-                      <span className="font-semibold text-sm tracking-wide opacity-90">{selectedCity}</span>
+                      <span className="font-semibold text-sm tracking-wide opacity-90">{displayCity}</span>
                     </div>
                     <h2 className="text-4xl md:text-6xl font-bold tracking-tight text-white mb-3 pb-1">
-                      {selectedDistrict.name}
+                      {displayDistrict?.name}
                     </h2>
                     <p className="text-lg text-white-500 font-medium flex items-center gap-3">
                       <span className="text-2xl font-bold">{Math.round(weather.current.temperature_2m)}°</span>
@@ -157,11 +193,10 @@ function App() {
                     </p>
                   </div>
                   <div className="text-center md:text-right">
-                    {getWeatherIcon(weather.current.weather_code, "text-8xl")}
+                    {getWeatherIcon(weather.current.weather_code, "text-8xl", weather.current.is_day)}
                     <p className="text-base font-medium mt-2 text-blue-100/80">Güncel Durum</p>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-12">
                   <StatPill icon={WiHumidity} label="Nem" value={`%${weather.current.relative_humidity_2m}`} />
                   <StatPill icon={WiStrongWind} label="Rüzgar" value={`${weather.current.wind_speed_10m} km/s`} />
@@ -170,12 +205,11 @@ function App() {
                 </div>
               </div>
 
-              {/* SAATLİK TAHMİN */}
-              <div className="bg-white/5 border border-white/10 backdrop-blur-md rounded-3xl p-6">
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-300">
                   <WiTime3 className="text-2xl"/> Saatlik Tahmin
                 </h3>
-                <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-custom">
+                <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-custom outline-none">
                   {weather.hourly.time.slice(0, 24).map((time, index) => {
                     const hour = new Date(time).getHours()
                     const now = new Date().getHours()
@@ -183,7 +217,7 @@ function App() {
                     return (
                       <div key={index} className={`min-w-[80px] flex flex-col items-center p-4 rounded-2xl border ${index === now ? 'bg-blue-600 border-blue-500' : 'bg-white/5 border-white/5 hover:bg-white/10'} transition-all`}>
                         <span className="text-xs opacity-70 mb-2">{hour}:00</span>
-                        {getWeatherIcon(weather.hourly.weather_code[index], "text-3xl mb-2")}
+                        {getWeatherIcon(weather.hourly.weather_code[index], "text-3xl mb-2", weather.hourly.is_day[index])}
                         <span className="font-bold text-lg">{Math.round(weather.hourly.temperature_2m[index])}°</span>
                       </div>
                     )
@@ -192,9 +226,8 @@ function App() {
               </div>
             </div>
 
-            {/* SAĞ SÜTUN */}
             <div className="space-y-6">
-              <div className="bg-white/5 border border-white/10 backdrop-blur-md rounded-3xl p-6 h-fit">
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-6 h-fit">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-300">
                   <FiCalendar /> 7 Günlük Tahmin
                 </h3>
@@ -203,18 +236,17 @@ function App() {
                     <div key={idx} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl transition-colors group">
                       <span className="w-16 text-sm font-medium text-slate-400 group-hover:text-white transition-colors">{idx === 0 ? 'Bugün' : formatDate(day)}</span>
                       <div className="flex items-center gap-3">
-                         {getWeatherIcon(weather.daily.weather_code[idx], "text-2xl")}
-                         <div className="flex gap-2 text-sm w-20 justify-end">
-                           <span className="font-bold">{Math.round(weather.daily.temperature_2m_max[idx])}°</span>
-                           <span className="opacity-50">{Math.round(weather.daily.temperature_2m_min[idx])}°</span>
-                         </div>
+                          {getWeatherIcon(weather.daily.weather_code[idx], "text-2xl")}
+                          <div className="flex gap-2 text-sm w-20 justify-end">
+                            <span className="font-bold">{Math.round(weather.daily.temperature_2m_max[idx])}°</span>
+                            <span className="opacity-50">{Math.round(weather.daily.temperature_2m_min[idx])}°</span>
+                          </div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-
-              <div className="bg-gradient-to-br from-orange-500/20 to-purple-500/20 border border-white/10 backdrop-blur-md rounded-3xl p-6">
+              <div className="bg-gradient-to-br from-orange-500/20 to-purple-500/20 border border-white/10 rounded-3xl p-6">
                 <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">Güneş Durumu</h3>
                 <div className="flex justify-between items-center">
                   <div className="flex flex-col items-center">
@@ -232,68 +264,185 @@ function App() {
               </div>
             </div>
           </div>
-        )}
+        ) : (
+          <div className="flex flex-col items-center justify-center h-[65vh] text-center space-y-8 animate-fade-in relative z-10">
+              <div className="relative group cursor-default">
+                  <div className="absolute -inset-4 bg-blue-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                  <div className="relative bg-white/5 p-8 rounded-full border border-white/10 backdrop-blur-sm ring-1 ring-white/5">
+                     <FiMapPin className="text-6xl text-blue-400 drop-shadow-[0_0_10px_rgba(96,165,250,0.5)]" />
+                  </div>
+              </div>
 
+              <div className="max-w-xl space-y-3">
+                <h2 className="text-4xl md:text-5xl font-bold text-white tracking-tight">
+                   {greeting}, SkyPulse.
+                </h2>
+                <p className="text-xl text-slate-300 font-light">
+                   Gökyüzünün nabzını tutmaya hazır mısın?
+                </p>
+
+                <div 
+                  onClick={() => {
+                    if(cityButtonRef.current) {
+                        cityButtonRef.current.focus();
+                        setIsCityOpen(true);
+                    }
+                  }}
+                  className="pt-10 flex flex-col items-center gap-3 cursor-pointer group transition-all hover:scale-105"
+                >
+                     <div className="flex items-center gap-2 text-sm text-blue-300 uppercase tracking-[0.2em] font-semibold group-hover:text-blue-200 transition-colors">
+                        {menuCity 
+                            ? `${menuCity} SEÇİLDİ, İLÇE SEÇİN` 
+                            : "BAŞLAMAK İÇİN İL SEÇİMİ YAPIN"
+                        }
+                        {!menuCity && <span className="hidden md:inline-block px-1.5 py-0.5 bg-white/10 rounded text-[10px] text-slate-400 group-hover:text-white transition-colors border border-white/5">CTRL + .</span>}
+                     </div>
+                     <FiArrowUp className="text-slate-500 text-xl group-hover:text-blue-400 transition-colors" />
+                </div>
+              </div>
+          </div>
+        )}
         <div className="mt-10 text-center border-t border-white/5 pt-6">
            <p className="text-slate-500 text-sm font-mono">DEVELOPED BY ONUR KESKIN © 2025</p>
         </div>
       </div>
-
       <style>{`
         .scrollbar-custom::-webkit-scrollbar { height: 6px; }
         .scrollbar-custom::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 10px; }
         .scrollbar-custom::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
         .scrollbar-custom::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fade-in 0.6s ease-out forwards; }
       `}</style>
     </div>
   )
 }
 
-function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = false, placeholder = "Ara...", side = 'left' }) {
+function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = false, placeholder = "Ara...", side = 'left', forceOpen = false, setForceOpen = null, triggerRef = null, shortcutHint = null }) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [focusedIndex, setFocusedIndex] = useState(-1) 
   const dropdownRef = useRef(null)
   const searchInputRef = useRef(null)
+  const listRef = useRef(null)
+
+  useEffect(() => {
+    if (forceOpen) setIsOpen(true);
+  }, [forceOpen]);
 
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false)
         setSearchTerm("")
+        setFocusedIndex(-1)
+        if (setForceOpen) setForceOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
+  }, [setForceOpen])
 
   useEffect(() => {
-    if (isOpen && searchable && searchInputRef.current) {
-      searchInputRef.current.focus()
+    if (isOpen) {
+        if(searchable && searchInputRef.current) {
+            setTimeout(() => {
+                searchInputRef.current?.focus();
+            }, 10);
+        }
+        setFocusedIndex(-1)
     }
   }, [isOpen, searchable])
 
-  const filteredOptions = options.filter(option => 
-    option.toLocaleLowerCase('tr').includes(searchTerm.toLocaleLowerCase('tr'))
-  )
+  const filteredOptions = useMemo(() => {
+      return options.filter(option => 
+        option.toLocaleLowerCase('tr').includes(searchTerm.toLocaleLowerCase('tr'))
+      );
+  }, [options, searchTerm]);
 
-  // Konumlandırma sınıfı dinamik olarak belirlenir
+  const handleKeyDown = (e) => {
+    if (!isOpen) {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            setIsOpen(true);
+        }
+        return;
+    }
+    switch (e.key) {
+        case 'ArrowDown':
+            e.preventDefault(); 
+            setFocusedIndex(prev => (prev < filteredOptions.length - 1 ? prev + 1 : 0));
+            break;
+        case 'ArrowUp':
+            e.preventDefault(); 
+            setFocusedIndex(prev => (prev > 0 ? prev - 1 : filteredOptions.length - 1));
+            break;
+        case 'Enter':
+            e.preventDefault();
+            if (focusedIndex >= 0 && filteredOptions[focusedIndex]) {
+                onChange(filteredOptions[focusedIndex]);
+                setIsOpen(false);
+                setSearchTerm("");
+                if (setForceOpen) setForceOpen(false);
+            }
+            break;
+        case 'Escape':
+            e.preventDefault();
+            setIsOpen(false);
+            setSearchTerm("");
+            if (setForceOpen) setForceOpen(false);
+            if (triggerRef && triggerRef.current) triggerRef.current.focus();
+            else if (dropdownRef.current && dropdownRef.current.querySelector('button')) dropdownRef.current.querySelector('button').focus();
+            break;
+        case 'Tab':
+            setIsOpen(false);
+            if (setForceOpen) setForceOpen(false);
+            break;
+        default:
+            break;
+    }
+  };
+
+  useEffect(() => {
+    if (focusedIndex >= 0 && listRef.current) {
+        const focusedElement = listRef.current.children[focusedIndex];
+        if (focusedElement) {
+            focusedElement.scrollIntoView({ block: 'nearest' });
+        }
+    }
+  }, [focusedIndex]);
+
   const positionClass = side === 'right' ? 'right-0' : 'left-0';
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative" ref={dropdownRef} onKeyDown={handleKeyDown}>
       <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 bg-transparent text-sm text-white px-4 py-2.5 rounded-xl hover:bg-white/10 transition-colors outline-none min-w-[140px] justify-between border border-transparent focus:border-white/20"
+        ref={triggerRef}
+        type="button" 
+        onClick={() => {
+            const newState = !isOpen;
+            setIsOpen(newState);
+            if (setForceOpen) setForceOpen(newState);
+        }}
+        tabIndex={0} 
+        className="flex items-center gap-2 bg-transparent text-sm text-white px-4 py-2.5 rounded-xl hover:bg-white/10 focus:bg-white/10 focus:ring-1 focus:ring-blue-500 transition-colors outline-none min-w-[160px] justify-between border border-transparent group"
       >
         <div className="flex items-center gap-2">
           {Icon && <Icon className="text-slate-400" />}
-          <span className="truncate max-w-[100px]">{selected}</span>
+          <span className="truncate max-w-[100px]">{selected || placeholder}</span>
         </div>
-        <FiChevronDown className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+        <div className="flex items-center gap-2">
+             {shortcutHint && !selected && (
+                 <span className="hidden md:block text-[10px] text-slate-500 border border-white/10 px-1.5 rounded bg-white/5 group-hover:bg-white/10 group-hover:text-slate-400 transition-colors">
+                    {shortcutHint}
+                 </span>
+             )}
+             <FiChevronDown className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+        </div>
       </button>
 
       {isOpen && (
-        <div className={`absolute top-full ${positionClass} mt-2 w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in ring-1 ring-black/5`}>
+        <div className={`absolute top-full ${positionClass} mt-2 w-64 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in ring-1 ring-black/5`}>
           {searchable && (
             <div className="p-2 sticky top-0 bg-[#0f172a] border-b border-white/10 z-10">
               <div className="relative">
@@ -304,25 +453,31 @@ function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = 
                   placeholder={placeholder}
                   className="w-full bg-white/5 text-white text-sm pl-8 pr-3 py-2 rounded-lg outline-none focus:bg-white/10 transition-colors placeholder:text-slate-500"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setFocusedIndex(-1); 
+                  }}
                   name="dropdown-search"
-                   autoComplete="off"
+                  autoComplete="off"
                 />
               </div>
             </div>
           )}
-          <div className="max-h-60 overflow-y-auto scrollbar-custom py-1">
+          <div ref={listRef} className="max-h-60 overflow-y-auto scrollbar-custom py-1">
             {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
+              filteredOptions.map((option, index) => (
                 <div 
                   key={option}
                   onClick={() => {
                     onChange(option)
                     setIsOpen(false)
                     setSearchTerm("")
+                    if (setForceOpen) setForceOpen(false);
                   }}
                   className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between
-                    ${selected === option ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'}
+                    ${selected === option ? 'bg-blue-600 text-white' : ''}
+                    ${focusedIndex === index && selected !== option ? 'bg-white/10 text-white' : ''}
+                    ${selected !== option && focusedIndex !== index ? 'text-slate-300 hover:bg-white/5 hover:text-white' : ''}
                   `}
                 >
                   {option}

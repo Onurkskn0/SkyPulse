@@ -1,16 +1,70 @@
-# React + Vite
+⛅ SkyPulse | Türkiye Genelinde Hava Durumu Uygulaması
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+ 
+ Demoyu görmek için: https://sky-pulse-mu.vercel.app
 
-Currently, two official plugins are available:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+📝 Proje Açıklaması
+SkyPulse, modern Frontend teknolojileri kullanılarak geliştirilmiş, anlık ve 7 günlük hava durumu tahminlerini sunan bir dashboard uygulamasıdır. Projenin temel zorluğu ve yeniliği, Türkiye'nin 81 il ve ilçesini kapsayan doğru coğrafi veri setini (Geocoding) lokal olarak yönetmesidir.
 
-## React Compiler
+Uygulama, standart API'lerin Türkçe isimlerde (Örn: "Altıeylül") yaşadığı sorunları ortadan kaldıran Hibrit Veri Mimarisi ile çalışır.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Ana Özellikler
+Dinamik Dashboard: Geçerli hava durumu bilgileri, saatlik tahminler ve 7 günlük özet, şık bir Bento Grid düzeninde sunulur.
 
-## Expanding the ESLint configuration
+Tamamen Yerelleştirilmiş Veri: 81 ilin tamamı ve ilçeleri lokal veri dosyasında (cities.js) tutulur.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Hatasız Konum Seçimi: Özel olarak tasarlanan "Searchable Dropdown" (Arama yapılabilir menü) ile hızlı ve karmaşa olmadan konum seçimi. (Mobil Ekran Taşması (Overflow) ve Otomatik Doldurma (Autocomplete) sorunları çözülmüştür.)
+
+Premium Tasarım: Tailwind CSS ile Apple Weather uygulamalarına benzer, koyu temalı (Dark Mode) ve buzlu cam (Glassmorphism) efektli modern UI.
+
+Sıfır API Maliyeti: OpenMeteo API'si kullandığı için ücretsizdir ve limitsiz veri çekebilir.
+
+🛠️ Teknolojik Yığın (Stack)
+Bu proje, bir Junior Frontend Developer'ın yetkinliğini göstermesi gereken en güncel araçları kullanır:
+
+Frontend Çekirdek: ReactJS (Hooks: useState, useEffect, useRef)
+
+İskelet / Hız: Vite
+
+Stilleme: Tailwind CSS (Utility-First Yaklaşım)
+
+Veri Çekme: Fetch API (Native JavaScript)
+
+İkonografi: react-icons (Wi, Fi, Bi setleri)
+
+Veri Kaynağı: OpenMeteo (Hava Durumu)
+
+Demo Yayınlama: Vercel
+
+🏗️ Mimari ve Çözüm Yaklaşımı
+Kodun en kritik kısmı, API çağırma mantığını sadeleştirmesidir.
+
+Hibrit Veri Yönetimi: Kullanıcı bir ilçe seçtiğinde, kod Geocoding API'ye sormak yerine, direkt olarak cities.js'e bakar ve buradaki güvenilir enlem/boylam (lat/lon) koordinatlarını OpenMeteo API'sine gönderir. Bu, hem hatasız çalışır hem de geleneksel yöntemlerden daha hızlıdır.
+
+🏁 Kurulum ve Başlatma
+Projeyi bilgisayarınızda çalıştırmak için:
+
+Depoyu Klonlayın:
+
+Bash
+
+git clone https://github.com/Onurkskn0/SkyPulse.git
+cd SkyPulse
+Bağımlılıkları Yükleyin:
+
+Bash
+
+npm install
+# (Bu adımda Tailwind CSS ve react-icons da yüklenecektir.)
+Projeyi Çalıştırın:
+
+Bash
+
+npm run dev
+# (Tarayıcınızda localhost:5173 adresinde açılacaktır.)
+💻 Geliştirici | Onur Keskin
+
+GitHub: https://github.com/Onurkskn0
+
+LinkedIn: https://www.linkedin.com/in/onur-kskn0

@@ -22,13 +22,20 @@ function App() {
   const [displayDistrict, setDisplayDistrict] = useState(null)
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [isDarkMode, setIsDarkMode] = useState(true)
+  const [errorMessage, setErrorMessage] = useState("")
+  const [lastRequest, setLastRequest] = useState({ url: null, lat: null, lon: null, calls: 0 })
   
   const [isDistrictOpen, setIsDistrictOpen] = useState(false);
   const [isCityOpen, setIsCityOpen] = useState(false);
   
   const [greeting, setGreeting] = useState("Merhaba");
+  const [perfMetrics, setPerfMetrics] = useState({ fcp: null, lcp: null, cls: 0, tti: null })
+  const [expandedDayIndex, setExpandedDayIndex] = useState(null)
   
   const cityButtonRef = useRef(null);
+  const districtButtonRef = useRef(null);
+  const hourlyRef = useRef(null);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -55,24 +62,58 @@ function App() {
   const fetchWeather = async (lat, lon, city, district) => {
     if (!lat || !lon) return; 
     setLoading(true);
+    setErrorMessage("")
     try {
-      const response = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,surface_pressure,wind_speed_10m&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`
-      );
+      const urlParams = new URLSearchParams(window.location.search)
+      const forceFail = urlParams.get('failApi') === '1' || import.meta.env.VITE_FORCE_API_FAIL === '1'
+      if (forceFail) throw new Error('Simulated API failure')
+      const reqUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,surface_pressure,wind_speed_10m&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`
+      const response = await fetch(reqUrl);
       const data = await response.json();
       if (!response.ok) throw new Error("API'den geçersiz yanıt alındı.");
 
       setWeather(data);
       setDisplayCity(city);        
       setDisplayDistrict(district); 
+      setLastRequest(prev => ({ url: reqUrl, lat, lon, calls: (prev.calls || 0) + 1 }))
 
     } catch (error) {
       console.error("Fetch Hatası:", error);
-      alert("Veri alınırken bir sorun oluştu."); 
+      setErrorMessage("Veri alınırken bir sorun oluştu."); 
     } finally {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 300);
     }
   };
+
+  useEffect(() => {
+    try {
+      const paintObserver = new PerformanceObserver((list) => {
+        list.getEntries().forEach((e) => {
+          if (e.name === 'first-contentful-paint') {
+            setPerfMetrics((m) => ({ ...m, fcp: Math.round(e.startTime) }))
+          }
+        })
+      })
+      paintObserver.observe({ type: 'paint', buffered: true })
+      let clsValue = 0
+      const clsObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (!entry.hadRecentInput) clsValue += entry.value
+        }
+        setPerfMetrics((m) => ({ ...m, cls: Number(clsValue.toFixed(3)) }))
+      })
+      clsObserver.observe({ type: 'layout-shift', buffered: true })
+      const lcpObserver = new PerformanceObserver((list) => {
+        const entries = list.getEntries()
+        const last = entries[entries.length - 1]
+        if (last) setPerfMetrics((m) => ({ ...m, lcp: Math.round(last.startTime) }))
+      })
+      lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true })
+      setTimeout(() => {
+        setPerfMetrics((m) => ({ ...m, tti: Math.round(performance.now()) }))
+      }, 1500)
+    } catch {}
+  }, [])
 
   const handleCityChange = (newCity) => {
     setMenuCity(newCity);      
@@ -81,6 +122,9 @@ function App() {
     
     setTimeout(() => {
        setIsDistrictOpen(true);
+       if (districtButtonRef.current) {
+         districtButtonRef.current.focus();
+       }
     }, 100); 
   };
 
@@ -132,12 +176,17 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8 font-sans selection:bg-blue-500 selection:text-white flex flex-col relative overflow-hidden">
+    <div className={`min-h-screen ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'} p-4 md:p-8 font-sans selection:bg-blue-500 selection:text-white flex flex-col relative overflow-hidden`}>
       <div className="fixed top-[-20%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
       <div className="fixed bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
       <div className="max-w-7xl mx-auto relative z-10 w-full flex-grow flex flex-col">
         
+        {errorMessage && (
+          <div role="alert" data-testid="error-banner" className="mb-4 px-4 py-2 bg-red-600/20 text-red-300 border border-red-500/30 rounded-lg">
+            {errorMessage}
+          </div>
+        )}
         <header className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
@@ -171,13 +220,22 @@ function App() {
               side="right"
               forceOpen={isDistrictOpen} 
               setForceOpen={setIsDistrictOpen} 
+              triggerRef={districtButtonRef}
             />
+            <button
+              type="button"
+              onClick={() => setIsDarkMode(prev => !prev)}
+              className="ml-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-sm"
+              data-testid="dark-mode-toggle"
+            >
+              <FiMoon />
+            </button>
           </div>
         </header>
 
         {loading && (
-            <div className="absolute inset-0 bg-slate-950/50 z-40 flex items-center justify-center backdrop-blur-sm rounded-3xl">
-                 <BiLoaderAlt className="animate-spin text-5xl text-blue-500" />
+            <div className="absolute inset-0 bg-slate-950/50 z-40 flex items-center justify-center backdrop-blur-sm rounded-3xl" aria-busy="true">
+                 <BiLoaderAlt className="animate-spin text-5xl text-blue-500" data-testid="loading-spinner" />
             </div>
         )}
 
@@ -186,7 +244,7 @@ function App() {
              <div className="lg:col-span-3 space-y-6">
               <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-[2.5rem] p-8 relative overflow-hidden shadow-2xl shadow-blue-900/20 group">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-white/20 transition-all duration-700"></div>
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center md:items-end gap-8">
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center md:items-end gap-8" data-testid="current-weather-card">
                   <div>
                     <div className="flex items-center gap-2 text-blue-200 mb-2">
                       <FiMapPin /> 
@@ -195,11 +253,12 @@ function App() {
                     <h2 className="text-4xl md:text-6xl font-bold tracking-tight text-white mb-3 pb-1">
                       {displayDistrict?.name}
                     </h2>
-                    <p className="text-lg text-white-500 font-medium flex items-center gap-3">
+                  <p className="text-lg text_white-500 font-medium flex items-center gap-3">
                       <span className="text-2xl font-bold">{Math.round(weather.current.temperature_2m)}°</span>
                       <span className="w-1 h-1 bg-blue-300 rounded-full"></span>
                       <span>Hissedilen {Math.round(weather.current.apparent_temperature)}°</span>
                     </p>
+                    <div className="text-xs opacity-70 mt-2" data-testid="coords">Koordinat: {displayDistrict?.lat}, {displayDistrict?.lon}</div>
                   </div>
                   <div className="text-center md:text-right">
                     {getWeatherIcon(weather.current.weather_code, "text-8xl", weather.current.is_day)}
@@ -218,19 +277,23 @@ function App() {
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-300">
                   <WiTime3 className="text-2xl"/> Saatlik Tahmin
                 </h3>
-                <div tabIndex={-1} className="flex overflow-x-auto gap-4 pb-4 scrollbar-custom outline-none focus:outline-none">
+                <div tabIndex={-1} ref={hourlyRef} className="flex overflow-x-scroll whitespace-nowrap scroll-smooth gap-4 pb-4 scrollbar-custom outline-none focus:outline-none" data-testid="hourly-forecast">
                   {weather.hourly.time.slice(0, 24).map((time, index) => {
                     const hour = new Date(time).getHours()
                     const now = new Date().getHours()
                     if (index < now && index > now - 1) return null 
                     return (
-                      <div key={index} className={`min-w-[80px] flex flex-col items-center p-4 rounded-2xl border ${index === now ? 'bg-blue-600 border-blue-500' : 'bg-white/5 border-white/5 hover:bg-white/10'} transition-all`}>
+                      <div key={index} className={`min-w-[80px] flex flex-col items-center p-4 rounded-2xl border flex-shrink-0 ${hour === now ? 'bg-blue-600 border-blue-500' : 'bg-white/5 border-white/5 hover:bg-white/10'} transition-all`} data-testid={`hour-${hour}`} aria-current={hour === now ? 'true' : 'false'}>
                         <span className="text-xs opacity-70 mb-2">{hour}:00</span>
                         {getWeatherIcon(weather.hourly.weather_code[index], "text-3xl mb-2", weather.hourly.is_day[index])}
                         <span className="font-bold text-lg">{Math.round(weather.hourly.temperature_2m[index])}°</span>
                       </div>
                     )
                   })}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button type="button" data-testid="scroll-prev" className="px-2 py-1 text-xs bg-white/10 rounded" onClick={() => { if (hourlyRef.current) hourlyRef.current.scrollBy({ left: -200, behavior: 'smooth' }) }}>Önceki</button>
+                  <button type="button" data-testid="scroll-next" className="px-2 py-1 text-xs bg-white/10 rounded" onClick={() => { if (hourlyRef.current) hourlyRef.current.scrollBy({ left: 200, behavior: 'smooth' }) }}>Sonraki</button>
                 </div>
               </div>
             </div>
@@ -242,7 +305,7 @@ function App() {
                 </h3>
                 <div className="space-y-1">
                   {weather.daily.time.map((day, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl transition-colors group">
+                    <div key={idx} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl transition-colors group" onClick={() => setExpandedDayIndex(expandedDayIndex === idx ? null : idx)}>
                       <span className="w-16 text-sm font-medium text-slate-400 group-hover:text-white transition-colors">{idx === 0 ? 'Bugün' : formatDate(day)}</span>
                       <div className="flex items-center gap-3">
                           {getWeatherIcon(weather.daily.weather_code[idx], "text-2xl")}
@@ -251,23 +314,32 @@ function App() {
                             <span className="opacity-50">{Math.round(weather.daily.temperature_2m_min[idx])}°</span>
                           </div>
                       </div>
+                      {expandedDayIndex === idx && (
+                        <div className="mt-3 w-full text-xs text-slate-300" data-testid={`day-detail-${idx}`}>
+                          <div className="flex items-center justify-between">
+                            <span>UV: {weather.daily.uv_index_max[idx]}</span>
+                            <span>Doğum: {new Date(weather.daily.sunrise[idx]).toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})}</span>
+                            <span>Batım: {new Date(weather.daily.sunset[idx]).toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-orange-500/20 to-purple-500/20 border border-white/10 rounded-3xl p-6">
+              <div className="bg-gradient-to-br from-orange-500/20 to-purple-500/20 border border-white/10 rounded-3xl p-6" data-testid="sun-card">
                 <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">Güneş Durumu</h3>
                 <div className="flex justify-between items-center">
                   <div className="flex flex-col items-center">
                     <WiSunrise className="text-4xl text-orange-400 mb-1" />
                     <span className="text-xs opacity-60">Doğum</span>
-                    <span className="font-bold text-lg">{new Date(weather.daily.sunrise[0]).toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span className="font-bold text-lg" data-testid="sunrise-time">{new Date(weather.daily.sunrise[0]).toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'})}</span>
                   </div>
                   <div className="h-10 w-[1px] bg-white/10"></div>
                   <div className="flex flex-col items-center">
                     <WiSunset className="text-4xl text-purple-400 mb-1" />
                     <span className="text-xs opacity-60">Batım</span>
-                    <span className="font-bold text-lg">{new Date(weather.daily.sunset[0]).toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span className="font-bold text-lg" data-testid="sunset-time">{new Date(weather.daily.sunset[0]).toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'})}</span>
                   </div>
                 </div>
               </div>
@@ -276,14 +348,14 @@ function App() {
         ) : (
           <div className="flex flex-col items-center justify-center h-[65vh] text-center space-y-8 animate-fade-in relative z-10">
               <div className="relative group cursor-default">
-                  <div className="absolute -inset-4 bg-blue-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+            <div className="absolute -inset-4 bg-blue-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
                   <div className="relative bg-white/5 p-8 rounded-full border border-white/10 backdrop-blur-sm ring-1 ring-white/5">
                      <FiMapPin className="text-6xl text-blue-400 drop-shadow-[0_0_10px_rgba(96,165,250,0.5)]" />
                   </div>
               </div>
 
               <div className="max-w-xl space-y-3">
-                <h2 className="text-4xl md:text-5xl font-bold text-white tracking-tight">
+                <h2 className="text-4xl md:text-5xl font-bold text-white tracking-tight" data-testid="greeting">
                    {greeting}, SkyPulse.
                 </h2>
                 <p className="text-xl text-slate-300 font-light">
@@ -313,6 +385,8 @@ function App() {
         )}
         <div className="mt-10 text-center border-t border-white/5 pt-6">
            <p className="text-slate-500 text-sm font-mono">DEVELOPED BY ONUR KESKIN © 2025</p>
+           <div className="mt-3 text-xs opacity-60" data-testid="perf-metrics">FCP:{perfMetrics.fcp ?? 'NA'}ms • LCP:{perfMetrics.lcp ?? 'NA'}ms • CLS:{perfMetrics.cls} • TTI:{perfMetrics.tti ?? 'NA'}ms</div>
+           <div className="mt-1 text-xs opacity-60" data-testid="net-debug">Calls:{lastRequest.calls} • Lat:{lastRequest.lat ?? 'NA'} • Lon:{lastRequest.lon ?? 'NA'}</div>
         </div>
       </div>
       <style>{`
@@ -422,6 +496,7 @@ function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = 
   }, [focusedIndex]);
 
   const positionClass = side === 'right' ? 'right-0' : 'left-0';
+  const listboxId = side === 'right' ? 'district-listbox' : 'province-listbox';
 
   return (
     <div className="relative" ref={dropdownRef} onKeyDown={handleKeyDown}>
@@ -435,6 +510,9 @@ function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = 
         }}
         tabIndex={0} 
         className="flex items-center gap-2 bg-transparent text-sm text-white px-4 py-2.5 rounded-xl hover:bg-white/10 focus:bg-white/10 focus:ring-1 focus:ring-blue-500 transition-colors outline-none min-w-[160px] justify-between border border-transparent group"
+        data-testid={side === 'left' ? 'province-dropdown-trigger' : 'district-dropdown-trigger'}
+        aria-expanded={isOpen}
+        aria-controls={listboxId}
       >
         <div className="flex items-center gap-2">
           {Icon && <Icon className="text-slate-400" />}
@@ -472,7 +550,7 @@ function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = 
               </div>
             </div>
           )}
-          <div ref={listRef} className="max-h-60 overflow-y-auto scrollbar-custom py-1">
+          <div id={listboxId} ref={listRef} className="max-h-60 overflow-y-auto scrollbar-custom py-1" role="listbox" data-testid={side === 'left' ? 'province-options' : 'district-options'}>
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option, index) => (
                 <div 
@@ -488,6 +566,8 @@ function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = 
                     ${focusedIndex === index && selected !== option ? 'bg-white/10 text-white' : ''}
                     ${selected !== option && focusedIndex !== index ? 'text-slate-300 hover:bg-white/5 hover:text-white' : ''}
                   `}
+                  role="option"
+                  aria-selected={selected === option}
                 >
                   {option}
                   {selected === option && <div className="w-1.5 h-1.5 rounded-full bg-white"></div>}

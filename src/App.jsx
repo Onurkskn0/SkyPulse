@@ -2,12 +2,11 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   WiHumidity, WiStrongWind, WiThermometer, WiBarometer,
   WiDaySunny, WiDayCloudy, WiCloud, WiRain, WiSnow, WiThunderstorm, WiFog,
-  WiSunrise, WiSunset, WiTime3,
+  WiSunrise, WiSunset, WiTime3, WiRaindrop, WiWindDeg, WiCloudy,
   WiNightAltCloudy, WiNightAltRain, WiNightAltSnow, WiNightAltThunderstorm,
-  // YENİ EKLENEN SİS İKONLARI:
   WiDayFog, WiNightFog
 } from 'react-icons/wi'
-import { FiMapPin, FiCalendar, FiChevronDown, FiSearch, FiMoon, FiArrowUp } from 'react-icons/fi'
+import { FiMapPin, FiCalendar, FiChevronDown, FiSearch, FiMoon, FiArrowUp, FiDroplet, FiNavigation, FiClock } from 'react-icons/fi'
 import { BiLoaderAlt } from 'react-icons/bi'
 import { MdAir } from 'react-icons/md'
 
@@ -67,7 +66,7 @@ function App() {
       const urlParams = new URLSearchParams(window.location.search)
       const forceFail = urlParams.get('failApi') === '1' || import.meta.env.VITE_FORCE_API_FAIL === '1'
       if (forceFail) throw new Error('Simulated API failure')
-      const reqUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,surface_pressure,wind_speed_10m&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`
+      const reqUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,precipitation,cloud_cover&hourly=temperature_2m,weather_code,is_day,precipitation_probability,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant&timezone=auto&forecast_days=7`
       const response = await fetch(reqUrl);
       const data = await response.json();
       if (!response.ok) throw new Error("API'den geçersiz yanıt alındı.");
@@ -188,6 +187,24 @@ function App() {
     return new Date(dateStr).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric' })
   }
 
+  // Rüzgar yönü dereceyi yön metnine çevirir
+  const getWindDirection = (degrees) => {
+    if (degrees === undefined || degrees === null) return '-';
+    const directions = ['Kuzey', 'K.Doğu', 'Doğu', 'G.Doğu', 'Güney', 'G.Batı', 'Batı', 'K.Batı'];
+    const index = Math.round(degrees / 45) % 8;
+    return directions[index];
+  }
+
+  // Gün uzunluğunu hesaplar
+  const getDayLength = (sunrise, sunset) => {
+    const start = new Date(sunrise);
+    const end = new Date(sunset);
+    const diff = end - start;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}s ${minutes}dk`;
+  }
+
   return (
     <div className={`min-h-screen ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'} p-4 md:p-8 font-sans selection:bg-blue-500 selection:text-white flex flex-col relative overflow-hidden transition-colors duration-300`}>
       <div className={`fixed top-[-20%] left-[-10%] w-[500px] h-[500px] ${isDarkMode ? 'bg-blue-600/20' : 'bg-blue-400/20'} rounded-full blur-[120px] pointer-events-none z-0`}></div>
@@ -200,16 +217,16 @@ function App() {
             {errorMessage}
           </div>
         )}
-        <header className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              <WiDaySunny className="text-blue-500" size={40} />
+        <header className="flex flex-col items-center gap-4 mb-8">
+          <div className="text-center md:text-left w-full">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center justify-center md:justify-start gap-2">
+              <WiDaySunny className="text-blue-500" size={36} />
               SkyPulse <span className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} font-light text-sm hidden md:inline tracking-normal ml-2`}>| Anlık Hava. Akıllı Kararlar.</span>
             </h1>
-            <p className={`${isDarkMode ? 'text-slate-500' : 'text-slate-600'} text-sm mt-1 ml-1`}>Bugün, {new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p className={`${isDarkMode ? 'text-slate-500' : 'text-slate-600'} text-xs md:text-sm mt-1`}>Bugün, {new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
           </div>
 
-          <div className={`flex gap-3 ${isDarkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200 shadow-lg'} p-1.5 rounded-2xl z-50`}>
+          <div className={`flex flex-wrap items-center justify-center gap-2 ${isDarkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200 shadow-lg'} p-2 rounded-2xl z-50 w-full md:w-auto`}>
             <CustomDropdown
               triggerRef={cityButtonRef}
               options={cityKeys}
@@ -217,20 +234,20 @@ function App() {
               onChange={handleCityChange}
               icon={FiMapPin}
               searchable={true}
-              placeholder="İl Seçiniz..."
+              placeholder="İl Seçin"
               side="left"
               forceOpen={isCityOpen}
               setForceOpen={setIsCityOpen}
               shortcutHint="Ctrl + ."
               isDarkMode={isDarkMode}
             />
-            <div className={`w-[1px] ${isDarkMode ? 'bg-white/10' : 'bg-slate-200'} my-1`}></div>
+            <div className={`hidden md:block w-[1px] h-6 ${isDarkMode ? 'bg-white/10' : 'bg-slate-200'}`}></div>
             <CustomDropdown
               options={menuCity ? TURKEY_DATA[menuCity].map(d => d.name).sort() : []}
               selected={menuDistrict?.name}
               onChange={handleDistrictChange}
               searchable={true}
-              placeholder={menuCity ? "İlçe Seçiniz..." : "Önce İl Seçiniz"}
+              placeholder={menuCity ? "İlçe Seçin" : "Önce İl Seçin"}
               side="right"
               forceOpen={isDistrictOpen}
               setForceOpen={setIsDistrictOpen}
@@ -240,10 +257,11 @@ function App() {
             <button
               type="button"
               onClick={() => setIsDarkMode(prev => !prev)}
-              className={`ml-2 px-3 py-2 rounded-xl ${isDarkMode ? 'bg-white/10 hover:bg-white/20 border-white/10' : 'bg-slate-100 hover:bg-slate-200 border-slate-200'} border text-sm transition-colors`}
+              className={`p-2.5 rounded-xl ${isDarkMode ? 'bg-white/10 hover:bg-white/20 border-white/10' : 'bg-slate-100 hover:bg-slate-200 border-slate-200'} border transition-colors`}
               data-testid="dark-mode-toggle"
+              aria-label="Tema Değiştir"
             >
-              <FiMoon className={isDarkMode ? '' : 'text-slate-600'} />
+              <FiMoon className={`text-lg ${isDarkMode ? '' : 'text-slate-600'}`} />
             </button>
           </div>
         </header>
@@ -280,10 +298,12 @@ function App() {
                     <p className="text-base font-medium mt-2 text-blue-100/80">Güncel Durum</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-12">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-12">
                   <StatPill icon={WiHumidity} label="Nem" value={`%${weather.current.relative_humidity_2m}`} />
                   <StatPill icon={WiStrongWind} label="Rüzgar" value={`${weather.current.wind_speed_10m} km/s`} />
-                  <StatPill icon={WiBarometer} label="Basınç" value={`${Math.round(weather.current.surface_pressure)} hPa`} />
+                  <StatPill icon={FiNavigation} label="Yön" value={getWindDirection(weather.current.wind_direction_10m)} />
+                  <StatPill icon={WiRaindrop} label="Yağış İht." value={`%${weather.daily.precipitation_probability_max?.[0] ?? 0}`} />
+                  <StatPill icon={WiCloudy} label="Bulutluluk" value={`%${weather.current.cloud_cover ?? 0}`} />
                   <StatPill icon={MdAir} label="UV İndeks" value={weather.daily.uv_index_max[0]} />
                 </div>
               </div>
@@ -298,11 +318,12 @@ function App() {
                     const now = new Date().getHours();
                     const isCurrentHour = hour === now;
                     const isPastHour = hour < now;
+                    const precipProb = weather.hourly.precipitation_probability?.[index] ?? 0;
                     return (
                       <div
                         key={index}
                         id={isCurrentHour ? 'current-hour' : undefined}
-                        className={`min-w-[80px] flex flex-col items-center p-4 rounded-2xl border flex-shrink-0 transition-all
+                        className={`min-w-[90px] flex flex-col items-center p-3 rounded-2xl border flex-shrink-0 transition-all
                           ${isCurrentHour ? 'bg-blue-600 border-blue-500 text-white' : ''}
                           ${isPastHour && !isCurrentHour ? (isDarkMode ? 'bg-white/5 border-white/5 opacity-50' : 'bg-slate-100 border-slate-200 opacity-50') : ''}
                           ${!isPastHour && !isCurrentHour ? (isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-slate-50 border-slate-200 hover:bg-slate-100') : ''}
@@ -310,11 +331,15 @@ function App() {
                         data-testid={`hour-${hour}`}
                         aria-current={isCurrentHour ? 'true' : 'false'}
                       >
-                        <span className={`text-xs mb-2 ${isCurrentHour ? 'opacity-90 font-semibold' : 'opacity-70'}`}>
+                        <span className={`text-xs mb-1 ${isCurrentHour ? 'opacity-90 font-semibold' : 'opacity-70'}`}>
                           {isCurrentHour ? 'Şimdi' : `${hour.toString().padStart(2, '0')}:00`}
                         </span>
-                        {getWeatherIcon(weather.hourly.weather_code[index], "text-3xl mb-2", weather.hourly.is_day[index])}
+                        {getWeatherIcon(weather.hourly.weather_code[index], "text-2xl mb-1", weather.hourly.is_day[index])}
                         <span className="font-bold text-lg">{Math.round(weather.hourly.temperature_2m[index])}°</span>
+                        <div className={`flex items-center gap-1 mt-1 text-[10px] ${isCurrentHour ? 'text-blue-200' : isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                          <WiRaindrop className="text-sm" />
+                          <span>%{precipProb}</span>
+                        </div>
                       </div>
                     );
                   })}
@@ -343,6 +368,13 @@ function App() {
                       <div className={`flex items-center justify-between p-3 ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'} rounded-xl transition-colors group`}>
                         <span className={`w-16 text-sm font-medium ${isDarkMode ? 'text-slate-400 group-hover:text-white' : 'text-slate-500 group-hover:text-slate-800'} transition-colors`}>{idx === 0 ? 'Bugün' : formatDate(day)}</span>
                         <div className="flex items-center gap-3">
+                          {/* Yağış ihtimali badge */}
+                          {weather.daily.precipitation_probability_max?.[idx] > 0 && (
+                            <div className={`flex items-center gap-0.5 text-[10px] ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                              <WiRaindrop className="text-base" />
+                              <span>%{weather.daily.precipitation_probability_max[idx]}</span>
+                            </div>
+                          )}
                           {getWeatherIcon(weather.daily.weather_code[idx], "text-2xl")}
                           <div className="flex gap-2 text-sm w-20 justify-end">
                             <span className="font-bold">{Math.round(weather.daily.temperature_2m_max[idx])}°</span>
@@ -351,11 +383,55 @@ function App() {
                         </div>
                       </div>
                       {expandedDayIndex === idx && (
-                        <div className={`mx-3 mb-2 p-3 rounded-xl ${isDarkMode ? 'bg-white/5 text-slate-300' : 'bg-slate-50 text-slate-600'} text-xs`} data-testid={`day-detail-${idx}`}>
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1"><MdAir className="text-base" /> UV: {weather.daily.uv_index_max[idx]}</span>
-                            <span className="flex items-center gap-1"><WiSunrise className="text-lg text-orange-400" /> {new Date(weather.daily.sunrise[idx]).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
-                            <span className="flex items-center gap-1"><WiSunset className="text-lg text-purple-400" /> {new Date(weather.daily.sunset[idx]).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <div className={`mx-3 mb-2 p-4 rounded-xl ${isDarkMode ? 'bg-white/5 text-slate-300' : 'bg-slate-50 text-slate-600'} text-xs`} data-testid={`day-detail-${idx}`}>
+                          {/* İlk satır: Yağış ve Rüzgar */}
+                          <div className="grid grid-cols-2 gap-4 mb-3">
+                            <div className="flex items-center gap-2">
+                              <WiRaindrop className={`text-xl ${isDarkMode ? 'text-blue-400' : 'text-blue-500'}`} />
+                              <div>
+                                <div className="opacity-60 text-[10px]">Yağış İhtimali</div>
+                                <div className="font-semibold">%{weather.daily.precipitation_probability_max?.[idx] ?? 0}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <WiRain className={`text-xl ${isDarkMode ? 'text-blue-400' : 'text-blue-500'}`} />
+                              <div>
+                                <div className="opacity-60 text-[10px]">Toplam Yağış</div>
+                                <div className="font-semibold">{weather.daily.precipitation_sum?.[idx] ?? 0} mm</div>
+                              </div>
+                            </div>
+                          </div>
+                          {/* İkinci satır: Rüzgar ve UV */}
+                          <div className="grid grid-cols-2 gap-4 mb-3">
+                            <div className="flex items-center gap-2">
+                              <WiStrongWind className={`text-xl ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                              <div>
+                                <div className="opacity-60 text-[10px]">Max Rüzgar</div>
+                                <div className="font-semibold">{getWindDirection(weather.daily.wind_direction_10m_dominant?.[idx])} {weather.daily.wind_speed_10m_max?.[idx] ?? 0} km/s</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <MdAir className={`text-lg ${isDarkMode ? 'text-yellow-400' : 'text-yellow-500'}`} />
+                              <div>
+                                <div className="opacity-60 text-[10px]">UV İndeks</div>
+                                <div className="font-semibold">{weather.daily.uv_index_max[idx]}</div>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Üçüncü satır: Güneş bilgileri */}
+                          <div className={`flex items-center justify-between pt-2 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200'}`}>
+                            <span className="flex items-center gap-1">
+                              <WiSunrise className="text-lg text-orange-400" />
+                              {new Date(weather.daily.sunrise[idx]).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <span className="flex items-center gap-1 opacity-60">
+                              <FiClock className="text-sm" />
+                              {getDayLength(weather.daily.sunrise[idx], weather.daily.sunset[idx])}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <WiSunset className="text-lg text-purple-400" />
+                              {new Date(weather.daily.sunset[idx]).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
                           </div>
                         </div>
                       )}
@@ -549,14 +625,14 @@ function CustomDropdown({ options, selected, onChange, icon: Icon, searchable = 
           if (setForceOpen) setForceOpen(newState);
         }}
         tabIndex={0}
-        className={`flex items-center gap-2 bg-transparent text-sm ${isDarkMode ? 'text-white hover:bg-white/10 focus:bg-white/10' : 'text-slate-700 hover:bg-slate-100 focus:bg-slate-100'} px-4 py-2.5 rounded-xl focus:ring-1 focus:ring-blue-500 transition-colors outline-none min-w-[160px] justify-between border border-transparent group`}
+        className={`flex items-center gap-1.5 bg-transparent text-sm ${isDarkMode ? 'text-white hover:bg-white/10 focus:bg-white/10' : 'text-slate-700 hover:bg-slate-100 focus:bg-slate-100'} px-3 py-2 rounded-xl focus:ring-1 focus:ring-blue-500 transition-colors outline-none min-w-[120px] md:min-w-[140px] justify-between border border-transparent group`}
         data-testid={side === 'left' ? 'province-dropdown-trigger' : 'district-dropdown-trigger'}
         aria-expanded={isOpen}
         aria-controls={listboxId}
       >
-        <div className="flex items-center gap-2">
-          {Icon && <Icon className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />}
-          <span className="truncate max-w-[100px]">{selected || placeholder}</span>
+        <div className="flex items-center gap-1.5">
+          {Icon && <Icon className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />}
+          <span className="truncate max-w-[70px] md:max-w-[90px] text-xs md:text-sm">{selected || placeholder}</span>
         </div>
         <div className="flex items-center gap-2">
           {shortcutHint && !selected && (

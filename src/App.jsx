@@ -21,7 +21,15 @@ function App() {
   const [displayDistrict, setDisplayDistrict] = useState(null)
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [isDarkMode, setIsDarkMode] = useState(true)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    // localStorage'dan tema tercihini oku, yoksa varsayılan koyu tema
+    const savedTheme = localStorage.getItem('skypulse-theme');
+    if (savedTheme !== null) {
+      return savedTheme === 'dark';
+    }
+    // Sistem tercihine bak
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  })
   const [errorMessage, setErrorMessage] = useState("")
   const [lastRequest, setLastRequest] = useState({ url: null, lat: null, lon: null, calls: 0 })
 
@@ -57,6 +65,11 @@ function App() {
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
+
+  // Tema değiştiğinde localStorage'a kaydet
+  useEffect(() => {
+    localStorage.setItem('skypulse-theme', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
 
   const fetchWeather = async (lat, lon, city, district) => {
     if (!lat || !lon) return;
